@@ -1,0 +1,502 @@
+{
+  "info": {
+    "_postman_id": "ea570855-44b2-497d-b82d-07dad234ad4c",
+    "name": "Rido Pricing and Surge Engine API Suite",
+    "description": "Postman suite to test the newly implemented Dynamic Pricing & Surge Engine in Rido.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "1. Send OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+919876543210\",\n  \"purpose\": \"LOGIN\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/send-otp",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "send-otp"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2. Verify OTP & Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data.access_token) {",
+                  "    pm.environment.set(\"accessToken\", jsonData.data.access_token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+919876543210\",\n  \"otp\": \"999999\",\n  \"device_id\": \"postman-env\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/verify-otp",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "verify-otp"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin Pricing Config & Simulation",
+      "item": [
+        {
+          "name": "Configure AUTO Fare Config (Regression)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"base_fare\": 30,\n  \"per_km_rate\": 9,\n  \"per_minute_rate\": 0.6\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/pricing/vehicle-config/AUTO",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "pricing",
+                "vehicle-config",
+                "AUTO"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Configure MINI_CAR Fare Config (Regression)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"base_fare\": 40,\n  \"per_km_rate\": 12,\n  \"per_minute_rate\": 1.0\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/pricing/vehicle-config/MINI_CAR",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "pricing",
+                "vehicle-config",
+                "MINI_CAR"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Simulate AUTO Solo (Regression ₹168.75)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Verify AUTO solo fare is 168.75\", function () {",
+                  "    pm.expect(jsonData.data.final_fare).to.eql(168.75);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/pricing/simulate?vehicle_type=AUTO&distance_km=10&duration_min=25&passenger_count=1&surge_multiplier=1.25",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "pricing",
+                "simulate"
+              ],
+              "query": [
+                {
+                  "key": "vehicle_type",
+                  "value": "AUTO"
+                },
+                {
+                  "key": "distance_km",
+                  "value": "10"
+                },
+                {
+                  "key": "duration_min",
+                  "value": "25"
+                },
+                {
+                  "key": "passenger_count",
+                  "value": "1"
+                },
+                {
+                  "key": "surge_multiplier",
+                  "value": "1.25"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Simulate Cab Solo (Regression ₹231.25)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Verify Cab (MINI_CAR) solo fare is 231.25\", function () {",
+                  "    pm.expect(jsonData.data.final_fare).to.eql(231.25);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/pricing/simulate?vehicle_type=MINI_CAR&distance_km=10&duration_min=25&passenger_count=1&surge_multiplier=1.25",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "pricing",
+                "simulate"
+              ],
+              "query": [
+                {
+                  "key": "vehicle_type",
+                  "value": "MINI_CAR"
+                },
+                {
+                  "key": "distance_km",
+                  "value": "10"
+                },
+                {
+                  "key": "duration_min",
+                  "value": "25"
+                },
+                {
+                  "key": "passenger_count",
+                  "value": "1"
+                },
+                {
+                  "key": "surge_multiplier",
+                  "value": "1.25"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Simulate AUTO Shared (2 Passengers)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Verify Allocations exist for both riders\", function () {",
+                  "    pm.expect(jsonData.data.allocations.length).to.eql(2);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/pricing/simulate?vehicle_type=AUTO&distance_km=10&duration_min=25&passenger_count=2&surge_multiplier=1.25",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "pricing",
+                "simulate"
+              ],
+              "query": [
+                {
+                  "key": "vehicle_type",
+                  "value": "AUTO"
+                },
+                {
+                  "key": "distance_km",
+                  "value": "10"
+                },
+                {
+                  "key": "duration_min",
+                  "value": "25"
+                },
+                {
+                  "key": "passenger_count",
+                  "value": "2"
+                },
+                {
+                  "key": "surge_multiplier",
+                  "value": "1.25"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Event Boost",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"zone_id\": \"zone-1\",\n  \"event_name\": \"Postman Test Concert\",\n  \"event_type\": \"CONCERT\",\n  \"starts_at\": \"2026-06-21T06:00:00Z\",\n  \"ends_at\": \"2026-06-21T18:00:00Z\",\n  \"boost_peak_value\": 0.5,\n  \"decay_minutes\": 60\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/pricing/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "pricing",
+                "events"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Surge Debug Details",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/pricing/surge/zone-1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "pricing",
+                "surge",
+                "zone-1"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Fare Estimations",
+      "item": [
+        {
+          "name": "Get Fare Estimate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickup_lat\": 9.9252,\n  \"pickup_lng\": 78.1198,\n  \"drop_lat\": 9.9312,\n  \"drop_lng\": 78.1560,\n  \"vehicle_type\": \"AUTO\",\n  \"ride_type\": \"STANDARD\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/fare/estimate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "fare",
+                "estimate"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

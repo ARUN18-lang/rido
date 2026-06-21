@@ -1,0 +1,103 @@
+# =========================================================================
+# RIDO BACKEND DEVELOPMENT STACK
+# =========================================================================
+# 
+# To start the stack:
+#   docker-compose up --build
+# 
+# Mobile / Multi-Device Testing:
+#   To test this backend from physical phones or emulators on the same LAN:
+#   1. Find your host machine's local IP address (macOS command):
+#        ipconfig getifaddr en0
+#   2. In your mobile app client code, update the API base URL to:
+#        http://<YOUR_LAN_IP>:3000
+#   3. Ensure your phone and development machine are on the same Wi-Fi network.
+# 
+# To wipe data and start fresh:
+#   docker-compose down -v
+# =========================================================================
+
+version: '3.8'
+
+services:
+  # PostgreSQL 15 database service with PostGIS extension pre-installed
+  postgres:
+    image: postgis/postgis:15-3.4
+    container_name: rido_postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=rido_dev
+      - POSTGRES_PASSWORD=rido_dev_pass
+      - POSTGRES_DB=rido_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - rido-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rido_dev -d rido_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # Redis service for caching, geospatial tracking, and BullMQ queues
+  redis:
+    image: redis:7-alpine
+    container_name: rido_redis
+    restart: always
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - rido-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Express Node.js application server
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rido_backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    entrypoint: ["/app/scripts/docker-entrypoint.sh"]
+    command: ["npx", "nodemon", "src/server.js"]
+    volumes:
+      - .:/app
+      - /app/node_modules # prevents overriding node_modules inside container
+    env_file:
+      - .env
+    environment:
+      # Force environment variables for database and redis connections to container hostnames
+      - NODE_ENV=development
+      - PORT=3000
+      - DATABASE_URL=postgresql://rido_dev:rido_dev_pass@postgres:5432/rido_db?schema=public
+      - REDIS_URL=redis://redis:6379
+    networks:
+      - rido-network
+
+volumes:
+  postgres_data:
+    name: rido_postgres_data
+  redis_data:
+    name: rido_redis_data
+
+networks:
+  rido-network:
+    name: rido-network
+    driver: bridge

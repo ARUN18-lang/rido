@@ -1,0 +1,600 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum UserRole {
+  RIDER
+  DRIVER
+  ADMIN
+}
+
+enum RideMode {
+  SOLO
+  SHARED
+}
+
+enum RideType {
+  STANDARD
+  WOMEN_ONLY
+}
+
+enum RideStatus {
+  SEARCHING
+  POOL_MATCHING
+  DRIVER_ASSIGNED
+  DRIVER_ARRIVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+enum PoolStatus {
+  WAITING
+  MATCHED
+  CONFIRMED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum DriverStatus {
+  OFFLINE
+  ONLINE
+  ON_RIDE
+}
+
+enum VehicleType {
+  BIKE_TAXI
+  AUTO
+  MINI_CAR
+  SEDAN
+  SUV
+  TEMPO
+}
+
+enum PaymentMethod {
+  UPI
+  CASH
+  WALLET
+  CARD
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum KycStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DocumentType {
+  AADHAAR
+  DRIVING_LICENSE
+  VEHICLE_RC
+  VEHICLE_INSURANCE
+  PROFILE_PHOTO
+}
+
+enum OtpPurpose {
+  LOGIN
+  REGISTER
+  RIDE_START
+}
+
+model User {
+  id                 String   @id @default(uuid())
+  phone              String   @unique
+  name               String?
+  email              String?
+  gender             Gender?
+  role               UserRole @default(RIDER)
+  is_active          Boolean  @default(true)
+  is_phone_verified  Boolean  @default(false)
+  profile_photo_url  String?
+  fcm_token          String?
+  preferred_language String   @default("ta")
+  wallet_balance     Decimal  @default(0) @db.Decimal(12, 2)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  rides               Ride[]              @relation("RiderRides")
+  driver_profile      Driver?
+  payments            Payment[]
+  emergency_contacts  EmergencyContact[]
+  ratings_given       Rating[]            @relation("RatingsGiven")
+  ratings_received    Rating[]            @relation("RatingsReceived")
+  refresh_tokens      RefreshToken[]
+  audit_logs          AuditLog[]
+  pool_fare_allocations PoolFareAllocation[]
+  driver_earnings     DriverEarning[]
+  sos_alerts          SosAlert[]
+  disputes            Dispute[]
+
+  @@index([role])
+  @@index([created_at])
+  @@map("users")
+}
+
+model EmergencyContact {
+  id         String   @id @default(uuid())
+  user_id    String
+  name       String
+  phone      String
+  is_primary Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("emergency_contacts")
+}
+
+model Driver {
+  id                      String       @id @default(uuid())
+  user_id                 String       @unique
+  kyc_status              KycStatus    @default(PENDING)
+  is_female_verified      Boolean      @default(false)
+  current_lat             Decimal?     @db.Decimal(10, 7)
+  current_lng             Decimal?     @db.Decimal(10, 7)
+  current_heading         Decimal?     @db.Decimal(6, 2)
+  last_location_updated_at DateTime?
+  status                  DriverStatus @default(OFFLINE)
+  rating                  Decimal      @default(5.0) @db.Decimal(3, 2)
+  total_trips             Int          @default(0)
+  total_earnings          Decimal      @default(0) @db.Decimal(12, 2)
+  is_women_ride_enabled   Boolean      @default(false)
+  strike_count            Int          @default(0)
+  is_suspended            Boolean      @default(false)
+  created_at              DateTime     @default(now())
+  updated_at              DateTime     @updatedAt
+
+  user              User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  vehicles          Vehicle[]
+  rides             Ride[]
+  driver_documents  DriverDocument[]
+  pools             RidePool[]
+  driver_earnings   DriverEarning[]
+
+  @@index([status])
+  @@index([kyc_status])
+  @@map("drivers")
+}
+
+model DriverDocument {
+  id              String       @id @default(uuid())
+  driver_id       String
+  document_type   DocumentType
+  file_url        String
+  verified        Boolean      @default(false)
+  rejected_reason String?
+  uploaded_at     DateTime     @default(now())
+
+  driver Driver @relation(fields: [driver_id], references: [id], onDelete: Cascade)
+
+  @@index([driver_id])
+  @@map("driver_documents")
+}
+
+model Vehicle {
+  id                  String      @id @default(uuid())
+  driver_id           String
+  type                VehicleType
+  make                String
+  model               String
+  year                Int
+  color               String
+  registration_number String      @unique
+  max_passengers      Int
+  is_active           Boolean     @default(false)
+  is_ac               Boolean     @default(false)
+  created_at          DateTime    @default(now())
+
+  driver Driver  @relation(fields: [driver_id], references: [id], onDelete: Cascade)
+  rides  Ride[]
+  pools  RidePool[]
+
+  @@index([driver_id])
+  @@map("vehicles")
+}
+
+model VehicleFareConfig {
+  id                          String      @id @default(uuid())
+  vehicle_type                VehicleType @unique
+  base_fare                   Decimal     @db.Decimal(10, 2)
+  per_km_rate                 Decimal     @db.Decimal(10, 2)
+  per_minute_rate             Decimal     @db.Decimal(10, 2)
+  min_fare                    Decimal     @db.Decimal(10, 2)
+  cancellation_fee            Decimal     @db.Decimal(10, 2)
+  shared_discount_percent     Decimal     @db.Decimal(5, 2)
+  driver_shared_bonus_percent Decimal     @db.Decimal(5, 2)
+  max_surge_multiplier        Decimal     @default(2.0) @db.Decimal(4, 2)
+  detour_rate_per_km          Decimal?    @default(0.0) @db.Decimal(10, 2)
+  detour_rate_per_min         Decimal?    @default(0.0) @db.Decimal(10, 2)
+  waiting_charge_per_min      Decimal     @default(0.0) @db.Decimal(10, 2)
+  per_stop_charge             Decimal     @default(0.0) @db.Decimal(10, 2)
+  updated_at                  DateTime    @updatedAt
+
+  @@map("vehicle_fare_configs")
+}
+
+model Zone {
+  id               String   @id @default(uuid())
+  name             String
+  district         String
+  state            String   @default("Tamil Nadu")
+  polygon          Unsupported("geometry(Polygon,4326)")
+  surge_multiplier Decimal  @default(1.0) @db.Decimal(4, 2)
+  is_active        Boolean  @default(true)
+  created_at       DateTime @default(now())
+
+  pools           RidePool[]
+  surge_snapshots SurgeZoneSnapshot[]
+  event_boosts    EventBoostConfig[]
+
+  @@index([district])
+  @@map("zones")
+}
+
+model Ride {
+  id                  String     @id @default(uuid())
+  rider_id            String
+  driver_id           String?
+  vehicle_id          String?
+  pool_id             String?
+  mode                RideMode
+  type                RideType
+  vehicle_type        VehicleType
+  status              RideStatus @default(SEARCHING)
+  pickup_address      String
+  pickup_lat          Decimal    @db.Decimal(10, 7)
+  pickup_lng          Decimal    @db.Decimal(10, 7)
+  pickup_geom         Unsupported("geometry(Point,4326)")?
+  drop_address        String
+  drop_lat            Decimal    @db.Decimal(10, 7)
+  drop_lng            Decimal    @db.Decimal(10, 7)
+  drop_geom           Unsupported("geometry(Point,4326)")?
+  route_polyline      String?    @db.Text
+  distance_km         Decimal    @db.Decimal(10, 3)
+  duration_minutes    Int
+  estimated_fare      Decimal    @db.Decimal(10, 2)
+  final_fare          Decimal?   @db.Decimal(10, 2)
+  surge_multiplier    Decimal    @default(1.0) @db.Decimal(4, 2)
+  rider_otp           String?
+  rider_otp_attempts  Int        @default(0)
+  rider_otp_locked_until DateTime?
+  cancellation_reason String?
+  cancelled_by        String?
+  driver_assigned_at  DateTime?
+  started_at          DateTime?
+  completed_at        DateTime?
+  created_at          DateTime   @default(now())
+  updated_at          DateTime   @updatedAt
+
+  rider               User                 @relation("RiderRides", fields: [rider_id], references: [id])
+  driver              Driver?              @relation(fields: [driver_id], references: [id])
+  vehicle             Vehicle?             @relation(fields: [vehicle_id], references: [id])
+  pool                RidePool?            @relation(fields: [pool_id], references: [id])
+  payment             Payment?
+  ratings             Rating[]
+  ride_waypoints      RideWaypoint[]
+  pool_fare_allocation PoolFareAllocation?
+  pool_fare_breakdown RidePoolFareBreakdown?
+  driver_earnings     DriverEarning[]
+  disputes            Dispute[]
+  sos_alerts          SosAlert[]
+
+  @@index([rider_id])
+  @@index([driver_id])
+  @@index([status])
+  @@index([pool_id])
+  @@index([created_at])
+  @@map("rides")
+}
+
+model RideWaypoint {
+  id          String   @id @default(uuid())
+  ride_id     String
+  sequence    Int
+  lat         Decimal  @db.Decimal(10, 7)
+  lng         Decimal  @db.Decimal(10, 7)
+  geom        Unsupported("geometry(Point,4326)")
+  recorded_at DateTime @default(now())
+
+  ride Ride @relation(fields: [ride_id], references: [id], onDelete: Cascade)
+
+  @@index([ride_id])
+  @@map("ride_waypoints")
+}
+
+model RidePool {
+  id                      String     @id @default(uuid())
+  vehicle_type            VehicleType
+  max_passengers          Int
+  current_passenger_count Int        @default(0)
+  status                  PoolStatus @default(WAITING)
+  driver_id               String?
+  vehicle_id              String?
+  combined_route_polyline String?    @db.Text
+  total_distance_km       Decimal?   @db.Decimal(10, 3)
+  total_fare              Decimal?   @db.Decimal(10, 2)
+  zone_id                 String?
+  pool_window_start       DateTime
+  pool_window_end         DateTime
+  matched_at              DateTime?
+  started_at              DateTime?
+  completed_at            DateTime?
+  created_at              DateTime   @default(now())
+
+  rides           Ride[]
+  driver          Driver?                 @relation(fields: [driver_id], references: [id])
+  vehicle         Vehicle?                @relation(fields: [vehicle_id], references: [id])
+  zone            Zone?                   @relation(fields: [zone_id], references: [id])
+  allocations     PoolFareAllocation[]
+  fare_breakdowns RidePoolFareBreakdown[]
+
+  @@index([status])
+  @@index([vehicle_type])
+  @@map("ride_pools")
+}
+
+model PoolFareAllocation {
+  id                    String   @id @default(uuid())
+  pool_id               String
+  ride_id               String   @unique
+  rider_id              String
+  allocated_fare        Decimal  @db.Decimal(10, 2)
+  distance_share_percent Decimal @db.Decimal(5, 2)
+  is_paid               Boolean  @default(false)
+  created_at            DateTime @default(now())
+
+  pool  RidePool @relation(fields: [pool_id], references: [id], onDelete: Cascade)
+  ride  Ride     @relation(fields: [ride_id], references: [id], onDelete: Cascade)
+  rider User     @relation(fields: [rider_id], references: [id])
+
+  @@index([pool_id])
+  @@map("pool_fare_allocations")
+}
+
+model Payment {
+  id                       String        @id @default(uuid())
+  ride_id                  String        @unique
+  user_id                  String
+  amount                   Decimal       @db.Decimal(10, 2)
+  method                   PaymentMethod
+  status                   PaymentStatus @default(PENDING)
+  razorpay_order_id        String?       @unique
+  razorpay_payment_id      String?       @unique
+  razorpay_signature       String?
+  cash_collected_by_driver Boolean       @default(false)
+  refund_id                String?
+  refund_amount            Decimal?      @db.Decimal(10, 2)
+  idempotency_key          String?       @unique
+  created_at               DateTime      @default(now())
+  updated_at               DateTime      @updatedAt
+
+  ride Ride @relation(fields: [ride_id], references: [id])
+  user User @relation(fields: [user_id], references: [id])
+
+  @@index([user_id])
+  @@index([status])
+  @@map("payments")
+}
+
+model DriverEarning {
+  id                String   @id @default(uuid())
+  driver_id         String
+  ride_id           String
+  user_id           String
+  gross_amount      Decimal  @db.Decimal(10, 2)
+  commission_amount Decimal  @db.Decimal(10, 2)
+  bonus_amount      Decimal  @default(0) @db.Decimal(10, 2)
+  net_amount        Decimal  @db.Decimal(10, 2)
+  created_at        DateTime @default(now())
+
+  driver Driver @relation(fields: [driver_id], references: [id])
+  ride   Ride   @relation(fields: [ride_id], references: [id])
+  user   User   @relation(fields: [user_id], references: [id])
+
+  @@index([driver_id])
+  @@index([ride_id])
+  @@map("driver_earnings")
+}
+
+model Rating {
+  id         String   @id @default(uuid())
+  ride_id    String
+  rater_id   String
+  ratee_id   String
+  score      Int
+  comment    String?
+  created_at DateTime @default(now())
+
+  ride  Ride @relation(fields: [ride_id], references: [id])
+  rater User @relation("RatingsGiven", fields: [rater_id], references: [id])
+  ratee User @relation("RatingsReceived", fields: [ratee_id], references: [id])
+
+  @@unique([ride_id, rater_id])
+  @@map("ratings")
+}
+
+model OtpLog {
+  id         String     @id @default(uuid())
+  phone      String
+  otp_hash   String
+  purpose    OtpPurpose
+  expires_at DateTime
+  used_at    DateTime?
+  attempts   Int        @default(0)
+  created_at DateTime   @default(now())
+
+  @@index([phone, purpose])
+  @@map("otp_logs")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  user_id    String
+  token_hash String
+  expires_at DateTime
+  revoked_at DateTime?
+  device_id  String
+  created_at DateTime  @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([token_hash])
+  @@map("refresh_tokens")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actor_id    String?
+  action      String
+  entity_type String
+  entity_id   String?
+  metadata    Json?
+  ip_address  String?
+  created_at  DateTime @default(now())
+
+  actor User? @relation(fields: [actor_id], references: [id])
+
+  @@index([entity_type, entity_id])
+  @@index([created_at])
+  @@map("audit_logs")
+}
+
+model SosAlert {
+  id         String   @id @default(uuid())
+  ride_id    String
+  user_id    String
+  lat        Decimal  @db.Decimal(10, 7)
+  lng        Decimal  @db.Decimal(10, 7)
+  status     String   @default("ACTIVE")
+  created_at DateTime @default(now())
+
+  ride Ride @relation(fields: [ride_id], references: [id])
+  user User @relation(fields: [user_id], references: [id])
+
+  @@index([ride_id])
+  @@map("sos_alerts")
+}
+
+model Dispute {
+  id         String   @id @default(uuid())
+  ride_id    String
+  user_id    String
+  reason     String
+  status     String   @default("OPEN")
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  ride Ride @relation(fields: [ride_id], references: [id])
+  user User @relation(fields: [user_id], references: [id])
+
+  @@index([status])
+  @@map("disputes")
+}
+
+model PoolRevenueMultiplier {
+  id                 String      @id @default(uuid())
+  vehicle_type       VehicleType
+  passenger_count    Int
+  revenue_multiplier Decimal     @db.Decimal(4, 2)
+  discount_percent   Decimal     @db.Decimal(5, 2)
+  is_active          Boolean     @default(true)
+  updated_at         DateTime    @updatedAt
+
+  @@unique([vehicle_type, passenger_count])
+  @@map("pool_revenue_multipliers")
+}
+
+model SurgeZoneSnapshot {
+  id                       String   @id @default(uuid())
+  zone_id                  String
+  vehicle_type             VehicleType
+  demand_count             Int
+  supply_count             Int
+  demand_supply_ratio      Decimal  @db.Decimal(8, 4)
+  weather_severity         Decimal  @db.Decimal(3, 2)
+  traffic_congestion_index Decimal  @db.Decimal(5, 4)
+  event_boost              Decimal  @db.Decimal(3, 2)
+  surge_score              Decimal  @db.Decimal(5, 4)
+  surge_multiplier         Decimal  @db.Decimal(4, 2)
+  computed_at              DateTime @default(now())
+
+  zone Zone @relation(fields: [zone_id], references: [id], onDelete: Cascade)
+
+  @@map("surge_zone_snapshots")
+}
+
+enum EventType {
+  SPORTS
+  CONCERT
+  FESTIVAL
+  RELIGIOUS
+  OTHER
+}
+
+model EventBoostConfig {
+  id               String    @id @default(uuid())
+  zone_id          String
+  event_name       String
+  event_type       EventType
+  starts_at        DateTime
+  ends_at          DateTime
+  boost_peak_value Decimal   @db.Decimal(3, 2)
+  decay_minutes    Int
+  is_active        Boolean   @default(true)
+  created_by       String?
+  created_at       DateTime  @default(now())
+
+  zone Zone @relation(fields: [zone_id], references: [id], onDelete: Cascade)
+
+  @@map("event_boost_configs")
+}
+
+model RidePoolFareBreakdown {
+  id                         String      @id @default(uuid())
+  ride_id                    String      @unique
+  pool_id                    String?
+  vehicle_type               VehicleType
+  passenger_count            Int
+  solo_base_fare             Decimal     @db.Decimal(10, 2)
+  surge_multiplier           Decimal     @db.Decimal(4, 2)
+  revenue_multiplier_applied Decimal     @db.Decimal(4, 2)
+  total_pool_fare            Decimal     @db.Decimal(10, 2)
+  raw_per_rider_share        Decimal     @db.Decimal(10, 2)
+  detour_distance_km         Decimal     @db.Decimal(8, 3) @default(0.0)
+  detour_duration_min        Decimal     @db.Decimal(8, 2) @default(0.0)
+  detour_buffer_amount       Decimal     @db.Decimal(10, 2) @default(0.0)
+  stop_charge                Decimal     @db.Decimal(10, 2) @default(0.0)
+  waiting_charge             Decimal     @db.Decimal(10, 2) @default(0.0)
+  final_fare                 Decimal     @db.Decimal(10, 2)
+  was_capped_to_solo         Boolean     @default(false)
+  created_at                 DateTime    @default(now())
+
+  ride Ride      @relation(fields: [ride_id], references: [id], onDelete: Cascade)
+  pool RidePool? @relation(fields: [pool_id], references: [id], onDelete: SetNull)
+
+  @@map("ride_pool_fare_breakdowns")
+}

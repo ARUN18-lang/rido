@@ -1,0 +1,23 @@
+# =========================================================================
+# docker-compose.override.yml (LOCAL DEVELOPMENT OVERRIDES)
+# =========================================================================
+# This file is for local-only tweaks. If you have services running natively 
+# on your host machine (e.g. Postgres on 5432 or Redis on 6379), you can 
+# remap the host-facing ports here without modifying docker-compose.yml.
+#
+# Remember: docker-compose.override.yml is merged automatically when running
+# "docker-compose up".
+# =========================================================================
+
+version: '3.8'
+
+services:
+  # Example override: change host port mapping if port 5432 is already in use
+  postgres:
+    ports:
+      - "5432:5432" # Format: HOST_PORT:CONTAINER_PORT
+
+  # Example override: change host port mapping if port 6379 is already in use
+  redis:
+    ports:
+      - "6379:6379" # Format: HOST_PORT:CONTAINER_PORT
