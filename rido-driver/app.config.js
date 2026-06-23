@@ -37,7 +37,7 @@ export default {
       ],
       config: {
         googleMaps: {
-          apiKey: 'AIzaSyCHeOKheKlqTa1_uFl5ZMbLaL0f3u5S9io',
+          apiKey: '',
         },
       },
     },
