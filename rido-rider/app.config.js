@@ -44,7 +44,7 @@ export default {
       USE_MOCK_API: false,
       API_BASE_URL: 'http://192.168.1.16:3000/api/v1',
       SOCKET_URL: 'http://192.168.1.16:3000',
-      GOOGLE_MAPS_API_KEY: 'AIzaSyCHeOKheKlqTa1_uFl5ZMbLaL0f3u5S9io',
+      GOOGLE_MAPS_API_KEY: '',
     },
   },
 };
